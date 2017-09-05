@@ -5,11 +5,17 @@ import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.WindowManager;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.view.*;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.graphics.Bitmap;
+import android.support.v4.app.ActionBarDrawerToggle;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.widget.Button;
+import android.widget.ToggleButton;
 
 import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
@@ -48,9 +54,16 @@ public class MainActivity extends Activity implements OnTouchListener,CvCameraVi
     private boolean isImageViewShown = false;
     Rect chooseFaceRect;
     private boolean isFaceRectChosen = false;
+    private boolean isFaceRectangleEnabled = false;
+    private boolean isFaceBlurEnabled = false;
     private List<Point> ContourPointList;
     private MatOfPoint loadedContourPoint;
     private List<MatOfPoint> last_contour;
+
+    private DrawerLayout mDrawerLayout = null;
+
+    private static final int MAX_CLICK_DURATION = 200;
+    private long startClickTime;
 
     static{ System.loadLibrary("opencv_java"); }
 
@@ -59,12 +72,41 @@ public class MainActivity extends Activity implements OnTouchListener,CvCameraVi
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main_slider);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.activity_main);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
         mImageView = (ImageView) findViewById(R.id.cameraImageView);
+
+        mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+        mDrawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED);
+        ToggleButton faceRectBtn = (ToggleButton) findViewById(R.id.faceRectBtn);
+        faceRectBtn.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    // The toggle is enabled
+                    isFaceRectangleEnabled = true;
+                } else {
+                    // The toggle is disabled
+                    isFaceRectangleEnabled = false;
+                }
+            }
+        });
+
+        ToggleButton faceBlurBtn = (ToggleButton) findViewById(R.id.faceBlurBtn);
+        faceBlurBtn.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    // The toggle is enabled
+                    isFaceBlurEnabled = true;
+                } else {
+                    // The toggle is disabled
+                    isFaceBlurEnabled = false;
+                }
+            }
+        });
+
 
         ContourPointList = new ArrayList<Point>();
         loadedContourPoint = new MatOfPoint();
@@ -129,8 +171,11 @@ public class MainActivity extends Activity implements OnTouchListener,CvCameraVi
 
 
         Rect[] facesArray = faces.toArray();
-//        for (int i = 0; i < facesArray.length; i++)
-//            Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+        if(isFaceRectangleEnabled){
+            for (int i = 0; i < facesArray.length; i++)
+                Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+        }
+
         if (facesArray.length == 1)
         {
             chooseFaceRect = facesArray[0].clone();
@@ -150,81 +195,96 @@ public class MainActivity extends Activity implements OnTouchListener,CvCameraVi
     }
 
     public boolean onTouch(View v, MotionEvent event) {
-
-        cameraView_OnTouch(v, event);
-        isImageViewShown = true;
-        return false;
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN: {
+                startClickTime = Calendar.getInstance().getTimeInMillis();
+                break;
+            }
+            case MotionEvent.ACTION_UP: {
+                long clickDuration = Calendar.getInstance().getTimeInMillis() - startClickTime;
+                if(clickDuration < MAX_CLICK_DURATION) {
+                    //click event has occurred
+                    cameraView_OnTouch(v, event);
+                    isImageViewShown = true;
+                }
+            }
+        }
+        return true;
     }
 
     private void cameraView_OnTouch(View view, MotionEvent event) {
+        mImageView.setImageDrawable(null);
+        if(isFaceBlurEnabled){
+            int rows = mRgba.rows();
+            int cols = mRgba.cols();
 
-        int rows = mRgba.rows();
-        int cols = mRgba.cols();
+            if(isFaceRectChosen){
+                //
+                ContourPointList.clear();
+                last_contour.clear();
 
-        if(isFaceRectChosen){
+                //
+                int newX = chooseFaceRect.x - chooseFaceRect.width/8;
+                int newY = chooseFaceRect.y - chooseFaceRect.height/8;
+                if(newX>0)
+                    chooseFaceRect.x = newX;
+                if(newY>0)
+                    chooseFaceRect.y = newY;
+
+                int newWidth = chooseFaceRect.width+chooseFaceRect.width/4;
+                int newHeight= chooseFaceRect.height+chooseFaceRect.height/4;
+                if(chooseFaceRect.x+newWidth<cols)
+                    chooseFaceRect.width = newWidth;
+                if(chooseFaceRect.y+newHeight<rows)
+                    chooseFaceRect.height = newHeight;
+                //
+                for (int i = chooseFaceRect.x;i<chooseFaceRect.x+chooseFaceRect.width;i=i+10){
+                    Point readPoint = new Point();
+                    readPoint.x = Double.valueOf(i);
+                    readPoint.y = Double.valueOf(chooseFaceRect.y);
+                    ContourPointList.add(readPoint);
+                }
+
+                for (int j = chooseFaceRect.y;j<chooseFaceRect.y+chooseFaceRect.height;j=j+10){
+                    Point readPoint = new Point();
+                    readPoint.x = Double.valueOf(chooseFaceRect.x+chooseFaceRect.width);
+                    readPoint.y = Double.valueOf(j);
+                    ContourPointList.add(readPoint);
+                }
+
+                for (int i = chooseFaceRect.x+chooseFaceRect.width;i>chooseFaceRect.x;i=i-10){
+                    Point readPoint = new Point();
+                    readPoint.x = Double.valueOf(i);
+                    readPoint.y = Double.valueOf(chooseFaceRect.y+chooseFaceRect.height);
+                    ContourPointList.add(readPoint);
+                }
+
+                for (int j = chooseFaceRect.y+chooseFaceRect.height;j>chooseFaceRect.y;j=j-10){
+                    Point readPoint = new Point();
+                    readPoint.x = Double.valueOf(chooseFaceRect.x);
+                    readPoint.y = Double.valueOf(j);
+                    ContourPointList.add(readPoint);
+                }
+                loadedContourPoint.fromList(ContourPointList);
+                last_contour.add(loadedContourPoint);
+
+                isFaceRectChosen = false;
+            }
+
             //
-            ContourPointList.clear();
-            last_contour.clear();
+            Mat hole = new Mat(rows, cols, CvType.CV_8UC1, new Scalar(0));
+            Imgproc.drawContours(hole, last_contour, last_contour.size()-1, new Scalar(255),-1);
 
-            //
-            int newX = chooseFaceRect.x - chooseFaceRect.width/8;
-            int newY = chooseFaceRect.y - chooseFaceRect.height/8;
-            if(newX>0)
-                chooseFaceRect.x = newX;
-            if(newY>0)
-                chooseFaceRect.y = newY;
-
-            int newWidth = chooseFaceRect.width+chooseFaceRect.width/4;
-            int newHeight= chooseFaceRect.height+chooseFaceRect.height/4;
-            if(chooseFaceRect.x+newWidth<cols)
-                chooseFaceRect.width = newWidth;
-            if(chooseFaceRect.y+newHeight<rows)
-                chooseFaceRect.height = newHeight;
-            //
-            for (int i = chooseFaceRect.x;i<chooseFaceRect.x+chooseFaceRect.width;i=i+10){
-                Point readPoint = new Point();
-                readPoint.x = Double.valueOf(i);
-                readPoint.y = Double.valueOf(chooseFaceRect.y);
-                ContourPointList.add(readPoint);
-            }
-
-            for (int j = chooseFaceRect.y;j<chooseFaceRect.y+chooseFaceRect.height;j=j+10){
-                Point readPoint = new Point();
-                readPoint.x = Double.valueOf(chooseFaceRect.x+chooseFaceRect.width);
-                readPoint.y = Double.valueOf(j);
-                ContourPointList.add(readPoint);
-            }
-
-            for (int i = chooseFaceRect.x+chooseFaceRect.width;i>chooseFaceRect.x;i=i-10){
-                Point readPoint = new Point();
-                readPoint.x = Double.valueOf(i);
-                readPoint.y = Double.valueOf(chooseFaceRect.y+chooseFaceRect.height);
-                ContourPointList.add(readPoint);
-            }
-
-            for (int j = chooseFaceRect.y+chooseFaceRect.height;j>chooseFaceRect.y;j=j-10){
-                Point readPoint = new Point();
-                readPoint.x = Double.valueOf(chooseFaceRect.x);
-                readPoint.y = Double.valueOf(j);
-                ContourPointList.add(readPoint);
-            }
-            loadedContourPoint.fromList(ContourPointList);
-            last_contour.add(loadedContourPoint);
-
-            isFaceRectChosen = false;
+            Mat frameBlur = new Mat(rows, cols, mRgba.type());
+            Imgproc.GaussianBlur(mRgba, frameBlur, new Size(61, 61), 0);
+            mRgba.copyTo(frameBlur, hole);//将原图像拷贝进遮罩图层
+            mImageView.setImageBitmap(matToBitmap(frameBlur));
+        }
+        else{
+            mImageView.setImageBitmap(matToBitmap(mRgba));
         }
 
-        //
-        Mat hole = new Mat(rows, cols, CvType.CV_8UC1, new Scalar(0));
-        Imgproc.drawContours(hole, last_contour, last_contour.size()-1, new Scalar(255),-1);
-
-        Mat frameBlur = new Mat(rows, cols, mRgba.type());
-        Imgproc.GaussianBlur(mRgba, frameBlur, new Size(61, 61), 0);
-        mRgba.copyTo(frameBlur, hole);//将原图像拷贝进遮罩图层
-
-        mImageView.setImageBitmap(matToBitmap(frameBlur));
         // show imageView and hide cameraView
-        mOpenCvCameraView.setVisibility(View.INVISIBLE);
         mImageView.setVisibility(View.VISIBLE);
     }
 
@@ -237,7 +297,7 @@ public class MainActivity extends Activity implements OnTouchListener,CvCameraVi
         {
             if (isImageViewShown)
             {
-                mOpenCvCameraView.setVisibility(View.VISIBLE);
+//                mOpenCvCameraView.setVisibility(View.VISIBLE);
                 mImageView.setVisibility(View.INVISIBLE);
                 isImageViewShown = false;
             } else {
