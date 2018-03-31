@@ -14,7 +14,8 @@
         android:id="@+id/intro"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="It's recognition demo on hand written digits, enjoy!" />
+        android:textSize="25sp"
+        android:text="It's a recognition demo on hand written digits, enjoy!" />
     <com.example.bolong_wen.handwritedigitrecognize.HandWriteView
         android:id="@+id/handWriteView"
         android:layout_below="@id/intro"
@@ -42,5 +43,7 @@
         android:layout_height="wrap_content"
         android:layout_alignParentLeft = "true"
         android:layout_alignParentBottom="true"
+        android:textSize="25sp"
+        android:layout_marginBottom = "50dp"
         android:text= "The recognition result is: " />
 </RelativeLayout>
