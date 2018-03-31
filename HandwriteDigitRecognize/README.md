@@ -12,4 +12,4 @@ A toy app to recognize the hand-written digits by classfier, which is trained an
 ## Demo Show:
 
 
-![Alt text](https://github.com/wblgers/OpenCV_Android_Plus/tree/master/picture/HandwriteDigitRecognize.gif)
+![Alt text](https://github.com/wblgers/OpenCV_Android_Plus/blob/master/picture/HandwriteDigitRecognize.gif)
